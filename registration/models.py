@@ -1,19 +1,17 @@
 from datetime import datetime
-
-from django.contrib.auth.models import AbstractUser
 from django.db import models
 from phonenumber_field.modelfields import PhoneNumberField
 
 
 def get_avatar_path(instance, filename):
-    return 'user-avatar/{0}/{1}'.format(instance.username, filename)
+    return 'registration-avatar/{0}/{1}'.format(instance.username, filename)
 
 
 def get_user_docs_path(instance, filename):
-    return 'user-docs/{0}/{1}'.format(instance.associated_account, filename)
+    return 'registration-docs/{0}/{1}'.format(instance.associated_account, filename)
 
 
-class User(AbstractUser):
+class UserData(models.Model):
     avatar = models.ImageField(upload_to=get_avatar_path, default='no-avatar.png')
     is_verified = models.BooleanField(default=False)
     is_tenant = models.BooleanField(default=False)
@@ -24,7 +22,7 @@ class User(AbstractUser):
 
 
 class Profile(models.Model):
-    username = models.OneToOneField(User, on_delete=models.CASCADE)
+    username = models.OneToOneField(UserData, on_delete=models.CASCADE)
     phone = PhoneNumberField()
     street_address = models.CharField(max_length=30)
     lga_area = models.CharField(max_length=30)
@@ -33,7 +31,7 @@ class Profile(models.Model):
     updated = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.user.username}'s profile"
+        return f"{self.username}'s profile"
 
 
 class Managers(models.Model):
@@ -43,11 +41,11 @@ class Managers(models.Model):
         ('ap', 'Approved'),
     ]
     ID_WARNING = 'Must be a valid ID!'
-    associated_account = models.OneToOneField(User, on_delete=models.CASCADE)
+    associated_account = models.OneToOneField(UserData, on_delete=models.CASCADE)
     fullname = models.CharField(max_length=100, null=True, blank=True)
     id_back = models.ImageField(upload_to=get_user_docs_path, help_text=ID_WARNING)
     id_front = models.ImageField(upload_to=get_user_docs_path, help_text=ID_WARNING)
-    added_by = models.ForeignKey(User, on_delete=models.DO_NOTHING, related_name='added_by')
+    added_by = models.ForeignKey(UserData, on_delete=models.DO_NOTHING, related_name='added_by')
     active_phone_number = PhoneNumberField()
     whatsapp_number = models.CharField(max_length=14)
     status = models.CharField(max_length=3, choices=VER_STATUS, default='pv')
@@ -56,10 +54,10 @@ class Managers(models.Model):
 
     def save(self, *args, **kwargs):
         if self.status == 'ap':
-            User.objects.filter(pk=self.associated_account.pk).update(is_manager=True, is_verified=True)
+            UserData.objects.filter(pk=self.associated_account.pk).update(is_manager=True, is_verified=True)
             Profile.objects.filter(user=self.associated_account.pk).update(phone=self.active_phone_number)
         else:
-            User.objects.filter(pk=self.associated_account.pk).update(is_manager=False)
+            UserData.objects.filter(pk=self.associated_account.pk).update(is_manager=False)
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -69,10 +67,8 @@ class Managers(models.Model):
         verbose_name_plural = 'Managers'
 
 
-
-
 class Tenants(models.Model):
-    associated_account = models.OneToOneField(User, on_delete=models.CASCADE, verbose_name='tenant')
+    associated_account = models.OneToOneField(UserData, on_delete=models.CASCADE, verbose_name='tenant')
     full_name = models.CharField(max_length=100)
     id_number = models.CharField(max_length=10)
     id_front = models.ImageField(upload_to=get_user_docs_path, blank=True)
@@ -85,10 +81,10 @@ class Tenants(models.Model):
     updated = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
-        if self.moved_in == True:
-            User.objects.filter(pk=self.associated_account_id).update(is_tenant=True)
+        if self.moved_in:
+            UserData.objects.filter(pk=self.associated_account_id).update(is_tenant=True)
         else:
-            User.objects.filter(pk=self.associated_account_id).update(is_tenant=False)
+            UserData.objects.filter(pk=self.associated_account_id).update(is_tenant=False)
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -118,7 +114,7 @@ class RelatedRecords(models.Model):
 
 
 class UserNotifications(models.Model):
-    user_id = models.ForeignKey(User, on_delete=models.CASCADE)
+    user_id = models.ForeignKey(UserData, on_delete=models.CASCADE)
     message = models.CharField(max_length=100)
     created = models.DateTimeField(auto_now_add=True)
 
@@ -128,4 +124,3 @@ class UserNotifications(models.Model):
     class Meta:
         verbose_name = "Notifications"
         verbose_name_plural = verbose_name
-
